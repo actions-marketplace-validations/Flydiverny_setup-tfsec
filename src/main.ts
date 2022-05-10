@@ -1,16 +1,30 @@
 import * as core from '@actions/core'
-import {wait} from './wait'
+import * as tc from '@actions/tool-cache'
+import * as os from 'os'
+import * as path from 'path'
 
 async function run(): Promise<void> {
+  const version = core.getInput('version')
+
   try {
-    const ms: string = core.getInput('milliseconds')
-    core.debug(`Waiting ${ms} milliseconds ...`) // debug is only output if you set the secret `ACTIONS_STEP_DEBUG` to true
+    let toolPath: string = tc.find('tfsec', version)
 
-    core.debug(new Date().toTimeString())
-    await wait(parseInt(ms, 10))
-    core.debug(new Date().toTimeString())
+    // If not found in cache, download
+    if (toolPath) {
+      core.info(`Found in cache @ ${toolPath}`)
+    } else {
+      const destination = path.join(os.homedir(), '.tfsec')
+      core.info(`Install destination is ${destination}`)
 
-    core.setOutput('time', new Date().toTimeString())
+      await tc.downloadTool(
+        `https://github.com/aquasecurity/tfsec/releases/download/${version}/tfsec-checkgen-darwin-amd64`,
+        destination
+      )
+
+      toolPath = await tc.cacheDir(path.join(destination), 'tfsec', version)
+    }
+
+    core.addPath(toolPath)
   } catch (error) {
     if (error instanceof Error) core.setFailed(error.message)
   }
